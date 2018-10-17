@@ -71,6 +71,14 @@ int main(int argc, char **argv)
         return stat;
     }
 
+    FILE *output;
+    output = fopen("ref.txt", "a");
+    if (output != NULL) {
+        fprintf(output, "%.6f\n", t2 - t1);
+        fclose(output);
+    } else
+        printf("open file error\n");
+
     for (;;) {
         char *p;
         printf(
