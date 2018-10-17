@@ -8,16 +8,15 @@
 #include "bloom.h"
 #include "tst.h"
 
+#define REF INS
+#define CPY DEL
+#define BENCH_TEST_FILE "bench_ref.txt"
+#define IN_FILE "cities.txt"
 #define TableSize 5000000 /* size of bloom filter */
 #define HashNumber 2      /* number of hash functions */
 
 /** constants insert, delete, max word(s) & stack nodes */
 enum { INS, DEL, WRDMAX = 256, STKMAX = 512, LMAX = 1024 };
-
-#define REF INS
-#define CPY DEL
-
-#define BENCH_TEST_FILE "bench_ref.txt"
 
 long poolsize = 2000000 * WRDMAX;
 
@@ -29,25 +28,22 @@ static void rmcrlf(char *s)
         s[--len] = 0;
 }
 
-#define IN_FILE "cities.txt"
-
 int main(int argc, char **argv)
 {
     char word[WRDMAX] = "";
     char *sgl[LMAX] = {NULL};
     tst_node *root = NULL, *res = NULL;
     int rtn = 0, idx = 0, sidx = 0;
-    FILE *fp = fopen(IN_FILE, "r");
     double t1, t2;
 
+    FILE *fp = fopen(IN_FILE, "r");
     if (!fp) { /* prompt, open, validate file for reading */
         fprintf(stderr, "error: file open failed '%s'.\n", argv[1]);
         return 1;
     }
+
     t1 = tvgetf();
-
     bloom_t bloom = bloom_create(TableSize);
-
     /* memory pool */
     char *pool = (char *) malloc(poolsize * sizeof(char));
     char *Top = pool;
@@ -65,8 +61,15 @@ int main(int argc, char **argv)
         Top += (strlen(Top) + 1);
     }
     t2 = tvgetf();
+
     fclose(fp);
     printf("ternary_tree, loaded %d words in %.6f sec\n", idx, t2 - t1);
+
+    if (argc == 2 && strcmp(argv[1], "--bench") == 0) {
+        int stat = bench_test(root, BENCH_TEST_FILE, LMAX);
+        tst_free_all(root);
+        return stat;
+    }
 
     for (;;) {
         char *p;
@@ -90,22 +93,21 @@ int main(int argc, char **argv)
             printf("enter word to add: ");
             if (argc > 1 && strcmp(argv[1], "--bench") == 0)
                 strcpy(Top, argv[3]);
-
             else if (!fgets(Top, sizeof word, stdin)) {
                 fprintf(stderr, "error: insufficient input.\n");
                 break;
             }
-            rmcrlf(Top);
 
+            rmcrlf(Top);
             p = Top;
-            t1 = tvgetf();
             if (bloom_test(bloom, Top) == 1) /* if detected by filter, skip */
                 res = NULL;
             else { /* update via tree traversal and bloom filter */
                 bloom_add(bloom, Top);
+                t1 = tvgetf();
                 res = tst_ins_del(&root, &p, INS, REF);
+                t2 = tvgetf();
             }
-            t2 = tvgetf();
             if (res) {
                 idx++;
                 Top += (strlen(Top) + 1);
@@ -117,7 +119,6 @@ int main(int argc, char **argv)
             if (argc > 1 && strcmp(argv[1], "--bench") == 0)  // a for auto
                 goto quit;
 
-
             break;
         case 'f':
             printf("find word in tree: ");
@@ -125,9 +126,9 @@ int main(int argc, char **argv)
                 fprintf(stderr, "error: insufficient input.\n");
                 break;
             }
+
             rmcrlf(word);
             t1 = tvgetf();
-
             if (bloom_test(bloom, word) == 1) {
                 t2 = tvgetf();
                 printf("  Bloomfilter found %s in %.6f sec.\n", word, t2 - t1);
@@ -136,6 +137,7 @@ int main(int argc, char **argv)
                     pow(1 - exp(-(double) HashNumber /
                                 (double) ((double) TableSize / (double) idx)),
                         HashNumber));
+
                 t1 = tvgetf();
                 res = tst_search(root, word);
                 t2 = tvgetf();
@@ -146,16 +148,17 @@ int main(int argc, char **argv)
                     printf("  ----------\n  %s not found by tree.\n", word);
             } else
                 printf("  %s not found by bloom filter.\n", word);
+
             break;
         case 's':
             printf("find words matching prefix (at least 1 char): ");
-
             if (argc > 1 && strcmp(argv[1], "--bench") == 0)
                 strcpy(word, argv[3]);
             else if (!fgets(word, sizeof word, stdin)) {
                 fprintf(stderr, "error: insufficient input.\n");
                 break;
             }
+
             rmcrlf(word);
             t1 = tvgetf();
             res = tst_search_prefix(root, word, sgl, &sidx, LMAX);
@@ -169,6 +172,7 @@ int main(int argc, char **argv)
 
             if (argc > 1 && strcmp(argv[1], "--bench") == 0)  // a for auto
                 goto quit;
+
             break;
         case 'd':
             printf("enter word to del: ");
@@ -176,6 +180,7 @@ int main(int argc, char **argv)
                 fprintf(stderr, "error: insufficient input.\n");
                 break;
             }
+
             rmcrlf(word);
             p = word;
             printf("  deleting %s\n", word);
@@ -189,6 +194,7 @@ int main(int argc, char **argv)
                 printf("  deleted %s in %.6f sec\n", word, t2 - t1);
                 idx--;
             }
+
             break;
         quit:
         case 'q':
